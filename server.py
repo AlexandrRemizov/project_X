@@ -71,15 +71,15 @@ def index_page(username: Optional[str] = Cookie(default=None)):
 
 @app.post("/login")
 def process_login_page(username: str = Form(...), password: str = Form(...)):
-    print(username, password)
     user = users.get(username)
     if not user or not verify_password(username, password):
-        return Response(
+        response = Response(
             json.dumps({
                 "success": False,
                 "messages": "Я вас не знаю!"
             }),
             media_type="application/json")
+        return response
     response = Response(
         json.dumps({
             "success": True,
