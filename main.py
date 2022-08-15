@@ -5,47 +5,31 @@ import json
 from typing import Optional
 from fastapi import FastAPI, Form, Cookie, Body
 from fastapi.responses import Response
+from os import environ
+import databases
+from routers import users
 
+DB_USER = environ.get("DB_USER", "user")
+DB_PASS = environ.get("DB_PASS", "password")
+DB_HOST = environ.get("DB_HOST", "localhost")
+DB_NAME = "postgres"
+SQLALCHEMY_DATABASE_URL = (
+    f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:5432/{DB_NAME}"
+)
+database = databases.Database(SQLALCHEMY_DATABASE_URL)
 
 app = FastAPI()
 
-SECRET_KEY = "4702300da3ca474b6ee584ec7937c90c1601e1c909ecfe2cfa6725a95d705cc7"
-PASSWORD_SALT = "651842cb7309d1da65adbe1d6214c6a56acf291baa3ece11f3e3a98da8af33ac"
 
-def sign_data(data: str) -> str:
-    '''Возвращает подписанные данные data'''
-    return hmac.new(
-        SECRET_KEY.encode(),
-        msg=data.encode(),
-        digestmod=hashlib.sha256
-    ).hexdigest().upper()
+@app.on_event("startup")
+async def startup():
+    await database.connect()
 
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
 
-def get_username_from_signed_string(username_signed: str) -> Optional[str]:
-    username_base64, sign = username_signed.split('.')
-    username = base64.b64decode(username_base64.encode()).decode()
-    valid_sign = sign_data(username)
-    if hmac.compare_digest(valid_sign, sign):
-        return username
-
-
-def verify_password(username: str, password: str) -> bool:
-    password_hash = hashlib.sha256((password + PASSWORD_SALT).encode()).hexdigest().lower()
-    stored_password_hash = users[username]['password'].lower()
-    return stored_password_hash == password_hash
-
-users = {
-    "alexandr@user.com": {
-        "name": "Александр",
-        "password": "e148432114a403b25e4d9e92d6da1eecbb6dd60ef134482ca085d5ac01820b7a",
-        "balance": 100000
-    },
-    "petrpidr@user.com": {
-        "name": "Петр",
-        "password": "fd9e961395c7d39b85ab82469e310edb465bedfecd6ea2536769200071aeb4b7",
-        "balance": 555555
-    }
-}
+app.include_router(users.router)
 
 @app.get('/')
 def index_page(username: Optional[str] = Cookie(default=None)):
